@@ -14,6 +14,8 @@ pub use interned::{
 pub use interner::InternRef;
 pub(crate) use interner::TypedInterner;
 pub use registry::{INTERNERS, Interner, InternerRegistry};
+#[cfg(feature = "serde")]
+pub use serde::DeserializeInternedErased;
 
 /// Calls [`InternerRegistry::rename`] with the given type name [`stringify!`]ed.
 ///

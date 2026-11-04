@@ -10,7 +10,9 @@ use std::{
     sync::Arc,
 };
 
-use crate::{INTERNERS, Intern, Interned, Weak, impl_intern_erased, interned::InternedWeak};
+use crate::{
+    INTERNERS, Intern, InternRef, Interned, Weak, impl_intern_erased, interned::InternedWeak,
+};
 
 /// Enables type-erasure of an [`Interned<T>`] in a way where it remains interned as a `T`.
 ///
@@ -165,6 +167,27 @@ impl<A: InternErased + ?Sized> InternedErased<A> {
             forget(self);
             arc
         }
+    }
+
+    pub fn from_owned<T: Intern>(value: T) -> Self
+    where
+        A: InternErasedFrom<T>,
+    {
+        Interned::from_owned(value).into()
+    }
+
+    pub fn from_box<T: Intern>(value: Box<T>) -> Self
+    where
+        A: InternErasedFrom<T>,
+    {
+        Interned::from_box(value).into()
+    }
+
+    pub fn from_ref<T: InternRef>(value: &T) -> Self
+    where
+        A: InternErasedFrom<T>,
+    {
+        Interned::from_ref(value).into()
     }
 
     /// Creates a new [`WeakErased`] reference to this interned value.
