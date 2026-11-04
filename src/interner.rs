@@ -70,7 +70,7 @@ impl<T: ?Sized> Default for TypedInterner<T> {
     }
 }
 
-impl<T: ?Sized + Intern> Interner for TypedInterner<T> {
+impl<T: Intern + ?Sized> Interner for TypedInterner<T> {
     fn name(&self) -> &str {
         &self.name
     }
@@ -116,7 +116,7 @@ impl<T: ?Sized + Intern> Interner for TypedInterner<T> {
     }
 }
 
-impl<T: ?Sized + Intern> TypedInterner<T> {
+impl<T: Intern + ?Sized> TypedInterner<T> {
     pub(crate) fn get(&self, value: &T) -> Option<Arc<T>> {
         self.values.get(value).cloned()
     }

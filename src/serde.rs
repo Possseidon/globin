@@ -2,7 +2,7 @@ use serde_core::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::{Intern, Interned};
 
-impl<T: ?Sized + Intern + Serialize> Serialize for Interned<T> {
+impl<T: Intern + Serialize + ?Sized> Serialize for Interned<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -39,3 +39,6 @@ impl_deserialize_from_box_for!(str);
 impl_deserialize_from_box_for!(std::path::Path);
 impl_deserialize_from_box_for!(std::ffi::OsStr);
 impl_deserialize_from_box_for!(std::ffi::CStr);
+
+// TODO: InternedAsSlice
+// TODO: InternedErased

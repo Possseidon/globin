@@ -19,7 +19,7 @@ Interning means, only a single allocation for each distinct value is stored. All
   - Most notably [`str`][str] and [`[T]`][slice] which should be preferred over interning `String` and `Vec<T>`
 - ⛓️‍💥 **`Weak` references**
   - Implement [`Eq`][Eq] and [`Hash`][Hash] unlike `Arc` (with some caveats)
-  - Useful for keys in a `HashMap` - also see the `WeakMapExt` extension trait
+  - Useful for keys in a `HashMap` - also see the `WeakHashMapExt` extension trait
 - 🧼 **Type-erased access to interners** of individual types
   - Provides basic diagnostics such as "How many duplicates could be eliminated?"
   - Current capacity can be checked and controlled (`reserve`, `shrink_to_fit`, etc.)
