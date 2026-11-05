@@ -18,16 +18,20 @@ readme = "README.md"
 
 [dependencies]
 ahash = "0.8.12"
-indexmap = "2.14.0"
-serde_core = { version = "1.0.229", optional = true }
+indexmap = "2.14.2"
+serde_core = { version = "1.0.229", optional = true, features = ["rc"] }
 
 [features]
 serde = ["dep:serde_core"]
 
 [dev-dependencies]
 serde = { version = "1.0.229", default-features = false, features = ["derive"] }
-serde_json = "1.0.151"
+serde_json = "1.0.154"
 
 [[example]]
 name = "serde"
+required-features = ["serde"]
+
+[[example]]
+name = "serde_erased"
 required-features = ["serde"]

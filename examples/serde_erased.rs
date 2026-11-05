@@ -11,7 +11,7 @@ trait ErasedExample: ErasedInterned + Debug {
 
 impl_intern_erased!(ErasedExample);
 
-#[derive(Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 struct A;
 
 impl ErasedExample for A {
@@ -20,7 +20,7 @@ impl ErasedExample for A {
     }
 }
 
-#[derive(Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 struct B;
 
 impl ErasedExample for B {

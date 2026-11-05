@@ -2,11 +2,11 @@ use globin::{INTERNERS, Interned};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-#[derive(Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 struct Person {
     name: Interned<str>,
     #[serde(default)]
-    parents: Interned<[Interned<Person>]>,
+    parents: Interned<[Interned<Self>]>,
 }
 
 fn main() {

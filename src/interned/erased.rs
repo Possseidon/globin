@@ -10,7 +10,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::{INTERNERS, Intern, InternRef, Interned, InternedWeak, Weak, impl_intern_erased};
+use crate::{INTERNERS, Intern, Interned, InternedWeak, Weak, impl_intern_erased};
 
 /// Enables type-erasure of an [`Interned<T>`] in a way where it remains interned as a `T`.
 ///
@@ -39,6 +39,7 @@ impl<A: InternErased + ?Sized> Clone for InternedErased<A> {
     }
 }
 
+/// Hidden from [`fmt::Debug`] as is the case with other smart-pointers like [`Box`] and [`Arc`].
 impl<A: InternErased + fmt::Debug + ?Sized> fmt::Debug for InternedErased<A> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         (*self.0).fmt(f)
@@ -151,7 +152,7 @@ impl<A: InternErasedFrom<T> + ?Sized, T: Intern> From<Interned<T>> for InternedE
 impl<A: InternErased + ?Sized> InternedErased<A> {
     /// Wraps an [`Arc`] that is assumed to already be interned as some concrete type `T` in
     /// [`INTERNERS`] in [`InternedErased`].
-    pub(super) fn new(value: Arc<A>) -> Self {
+    pub(super) fn from_interned(value: Arc<A>) -> Self {
         Self(ManuallyDrop::new(value))
     }
 
@@ -166,6 +167,9 @@ impl<A: InternErased + ?Sized> InternedErased<A> {
         }
     }
 
+    /// Interns the given `value` and immediately type-erases it.
+    ///
+    /// `value` is dropped if it was already interned.
     pub fn from_owned<T: Intern>(value: T) -> Self
     where
         A: InternErasedFrom<T>,
@@ -173,14 +177,24 @@ impl<A: InternErased + ?Sized> InternedErased<A> {
         Interned::from_owned(value).into()
     }
 
-    pub fn from_box<T: Intern>(value: Box<T>) -> Self
+    /// Interns the given unique [`Arc`] and immediately type-erases it.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the given [`Arc`] is not unique; consider calling [`Arc::make_mut`] if unsure.
+    ///
+    /// TODO: Replace the panic with UniqueArc.
+    pub fn from_unique_arc<T: Intern>(value: Arc<T>) -> Self
     where
         A: InternErasedFrom<T>,
     {
-        Interned::from_box(value).into()
+        Interned::from_unique_arc(value).into()
     }
 
-    pub fn from_ref<T: InternRef>(value: &T) -> Self
+    /// Interns the given `value` and immediately type-erases it.
+    ///
+    /// Prefer [`Self::from_owned`] if you have an owned value and don't need it anymore.
+    pub fn from_ref<T: Intern>(value: &T) -> Self
     where
         A: InternErasedFrom<T>,
     {
@@ -198,7 +212,7 @@ impl<A: InternErased + ?Sized> InternedErased<A> {
             .erase_for_downcast()
             .downcast()
             .ok()
-            .map(Interned::new)
+            .map(Interned::from_interned)
     }
 }
 
@@ -306,6 +320,8 @@ impl<A: InternErased + ?Sized, B: InternErased + ?Sized> PartialEq<InternedErase
 }
 
 // WeakErased::new can only be implemented for Sized types, but dyn Trait isn't
+// TODO: Once never is stabilized I might be able to use `Weak::<!>::new()` and coerce it, although
+// it doesn't seem to be possible on nightly at the moment.
 
 impl<A: InternErased + ?Sized> InternedWeak for WeakErased<A> {
     type Strong = InternedErased<A>;
@@ -337,6 +353,6 @@ impl<A: InternErased + ?Sized> InternedWeak for WeakErased<A> {
                 }
                 self.0.upgrade()
             })
-            .map(InternedErased::new)
+            .map(InternedErased::from_interned)
     }
 }

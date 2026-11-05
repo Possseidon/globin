@@ -2,59 +2,6 @@ use std::{any::type_name, borrow::Cow, sync::Arc};
 
 use crate::{Intern, Interner};
 
-/// Required for types to be interned with [`Interned::from_ref`](crate::Interned::from_ref).
-///
-/// - Has a blanket implementation over all [`Sized`] types that are [`Clone`].
-/// - Also implemented for most unsized [`std`] types such as [`str`] and slices.
-///
-/// A blanket implementation over `Box<T>: From<&T>` would work for most unsized types but not for
-/// [`Sized`] ones.
-#[diagnostic::on_unimplemented(
-    message = "unable to intern `{Self}` from a reference",
-    note = "`Sized` types must implement `Clone` to be internable from a reference",
-    note = "use an owned value via `Interned::from_owned` if `{Self}` cannot be `Clone`",
-    note = "unsized types must implement `InternRef` manually"
-)]
-pub trait InternRef: Intern {
-    fn intern_ref(&self) -> Box<Self>;
-}
-
-impl<T: Intern + Clone> InternRef for T {
-    fn intern_ref(&self) -> Box<Self> {
-        Box::new(self.clone())
-    }
-}
-
-impl<T: Intern + Clone> InternRef for [T] {
-    fn intern_ref(&self) -> Box<Self> {
-        self.into()
-    }
-}
-
-impl InternRef for str {
-    fn intern_ref(&self) -> Box<Self> {
-        self.into()
-    }
-}
-
-impl InternRef for std::path::Path {
-    fn intern_ref(&self) -> Box<Self> {
-        self.into()
-    }
-}
-
-impl InternRef for std::ffi::OsStr {
-    fn intern_ref(&self) -> Box<Self> {
-        self.into()
-    }
-}
-
-impl InternRef for std::ffi::CStr {
-    fn intern_ref(&self) -> Box<Self> {
-        self.into()
-    }
-}
-
 pub(crate) struct TypedInterner<T: ?Sized> {
     /// [`Arc`] instead of [`crate::Interned<T>`] since it has different [`Eq`] semantics.
     values: ahash::HashSet<Arc<T>>,

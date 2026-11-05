@@ -217,6 +217,8 @@ impl InternerRegistry {
     /// interned [`Arc`] is returned instead.
     ///
     /// While not strictly necessary, [`Self::get_value`] should be called first as an optimization.
+    ///
+    /// TODO: Use UniqueArc once stabilized.
     pub(crate) fn intern<T: Intern + ?Sized>(&self, value: Arc<T>) -> Arc<T> {
         self.get_or_init::<T, _>(|interner| interner.downcast_mut().intern(value))
     }

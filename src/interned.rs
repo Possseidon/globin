@@ -6,10 +6,12 @@ use std::{
     cmp::Ordering,
     collections::HashMap,
     error::Error,
+    ffi::{CStr, OsStr},
     fmt,
     hash::{Hash, Hasher},
     mem::{ManuallyDrop, forget},
     ops::Deref,
+    path::Path,
     ptr,
     sync::Arc,
 };
@@ -17,7 +19,7 @@ use std::{
 pub use as_slice::*;
 pub use erased::*;
 
-use crate::{INTERNERS, InternRef};
+use crate::INTERNERS;
 
 /// A value that is interned in the global [`INTERNERS`] registry.
 ///
@@ -106,27 +108,35 @@ impl<T: Intern + Default> Default for Interned<T> {
     }
 }
 
-impl<T: Intern> Default for Interned<[T]> {
+// Arc::<[T]>::default() and other unsized types can share allocations and must be avoided!
+
+impl<T: Intern + Clone> Default for Interned<[T]> {
     fn default() -> Self {
-        Self::from_box(Default::default())
+        Self::from_ref(&[])
     }
 }
 
 impl Default for Interned<str> {
     fn default() -> Self {
-        Self::from_box(Default::default())
+        Self::from_ref("")
     }
 }
 
-impl Default for Interned<std::ffi::OsStr> {
+impl Default for Interned<Path> {
     fn default() -> Self {
-        Self::from_box(Default::default())
+        Self::from_ref(Path::new(""))
     }
 }
 
-impl Default for Interned<std::ffi::CStr> {
+impl Default for Interned<OsStr> {
     fn default() -> Self {
-        Self::from_box(Default::default())
+        Self::from_ref(OsStr::new(""))
+    }
+}
+
+impl Default for Interned<CStr> {
+    fn default() -> Self {
+        Self::from_ref(c"")
     }
 }
 
@@ -152,13 +162,13 @@ impl<T: Intern + ?Sized> PartialEq<Weak<T>> for Interned<T> {
     }
 }
 
-impl<T: Intern, const N: usize> PartialEq<InternedAsSlice<T, N>> for Interned<[T]> {
+impl<T: Intern + Clone, const N: usize> PartialEq<InternedAsSlice<T, N>> for Interned<[T]> {
     fn eq(&self, other: &InternedAsSlice<T, N>) -> bool {
         ptr::addr_eq(Arc::as_ptr(&self.0), other.as_ptr())
     }
 }
 
-impl<T: Intern, const N: usize> PartialEq<WeakAsSlice<T, N>> for Interned<[T]> {
+impl<T: Intern + Clone, const N: usize> PartialEq<WeakAsSlice<T, N>> for Interned<[T]> {
     fn eq(&self, other: &WeakAsSlice<T, N>) -> bool {
         ptr::addr_eq(Arc::as_ptr(&self.0), other.0.as_ptr())
     }
@@ -220,33 +230,28 @@ impl<T: Intern> From<T> for Interned<T> {
     }
 }
 
-impl<T: Intern + ?Sized> From<Box<T>> for Interned<T> {
-    fn from(value: Box<T>) -> Self {
-        Self::from_box(value)
-    }
-}
+// TODO: Don't implement From<Arc> since it can panic, but UniqueArc will be fine:
+// impl<T: Intern + ?Sized> From<UniqueArc<T>> for Interned<T> {
+//     fn from(value: UniqueArc<T>) -> Self {
+//         Self::from_unique_arc(value)
+//     }
+// }
 
-impl<T: Intern> From<Vec<T>> for Interned<[T]> {
-    fn from(value: Vec<T>) -> Self {
-        // It would be nice to use from_ref if there is excess capacity, but that would require a
-        // Clone bound on T.
-        Self::from_box(value.into_boxed_slice())
-    }
-}
+// From<Vec> is useless since Arc can't reuse the memory, only Box can
 
-impl<T: InternRef + ?Sized> From<&T> for Interned<T> {
+impl<T: Intern + ?Sized> From<&T> for Interned<T> {
     fn from(value: &T) -> Self {
         Self::from_ref(value)
     }
 }
 
-impl<T: InternRef + ?Sized> From<&mut T> for Interned<T> {
+impl<T: Intern + ?Sized> From<&mut T> for Interned<T> {
     fn from(value: &mut T) -> Self {
         (&*value).into()
     }
 }
 
-impl<T: Intern, const N: usize> From<[T; N]> for Interned<[T]> {
+impl<T: Intern + Clone, const N: usize> From<[T; N]> for Interned<[T]> {
     fn from(value: [T; N]) -> Self {
         Self::slice_from_array(value)
     }
@@ -264,56 +269,46 @@ impl<T: Intern + Clone, const N: usize> From<&mut [T; N]> for Interned<[T]> {
     }
 }
 
-impl<T: Intern, const N: usize> From<InternedAsSlice<T, N>> for Interned<[T]> {
+impl<T: Intern + Clone, const N: usize> From<InternedAsSlice<T, N>> for Interned<[T]> {
     fn from(value: InternedAsSlice<T, N>) -> Self {
         value.unsize()
     }
 }
 
-impl<T: Intern, const N: usize> TryFrom<Box<[T]>> for Interned<[T; N]> {
-    type Error = Box<[T]>;
+// TODO: Don't implement From<Arc<[T]>> since it can panic, but UniqueArc will be fine:
+// impl<T: Intern + Clone, const N: usize> TryFrom<UniqueArc<[T]>> for Interned<[T; N]> {
+//     type Error = UniqueArc<[T]>;
 
-    fn try_from(value: Box<[T]>) -> Result<Self, Self::Error> {
-        value.try_into().map(Self::from_box)
-    }
-}
+//     fn try_from(value: UniqueArc<[T]>) -> Result<Self, Self::Error> {
+//         value.try_into().map(Self::from_unique_arc)
+//     }
+// }
 
-impl<T: Intern, const N: usize> TryFrom<Vec<T>> for Interned<[T; N]> {
-    type Error = Vec<T>;
-
-    fn try_from(value: Vec<T>) -> Result<Self, Self::Error> {
-        value.try_into().map(Self::from_box)
-    }
-}
-
-impl<'a, T: Intern + Clone, const N: usize> TryFrom<&'a [T]> for Interned<[T; N]> {
+impl<T: Intern + Clone, const N: usize> TryFrom<&[T]> for Interned<[T; N]> {
     type Error = TryFromSliceError;
 
-    fn try_from(value: &'a [T]) -> Result<Self, Self::Error> {
+    fn try_from(value: &[T]) -> Result<Self, Self::Error> {
         value.try_into().map(Self::from_ref)
     }
 }
 
-impl<'a, T: Intern + Clone, const N: usize> TryFrom<&'a mut [T]> for Interned<[T; N]> {
+impl<T: Intern + Clone, const N: usize> TryFrom<&mut [T]> for Interned<[T; N]> {
     type Error = TryFromSliceError;
 
-    fn try_from(value: &'a mut [T]) -> Result<Self, Self::Error> {
+    fn try_from(value: &mut [T]) -> Result<Self, Self::Error> {
         (&*value).try_into()
     }
 }
 
-impl<T: Intern + ?Sized, A> FromIterator<A> for Interned<T>
-where
-    Box<T>: FromIterator<A>,
-{
-    fn from_iter<I: IntoIterator<Item = A>>(iter: I) -> Self {
-        Self::from_box(Box::from_iter(iter))
+impl<T: Intern + Clone> FromIterator<T> for Interned<[T]> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        Self::from_unique_arc(Arc::from_iter(iter))
     }
 }
 
 impl<T: Intern + ?Sized> Interned<T> {
-    /// Wraps an [`Arc`] that is assumed to already be interned in [`INTERNERS`] in [`Interned`].
-    fn new(value: Arc<T>) -> Self {
+    /// Creates an [`Interned`] from an already interned [`Arc`].
+    fn from_interned(value: Arc<T>) -> Self {
         Self(ManuallyDrop::new(value))
     }
 
@@ -333,29 +328,43 @@ impl<T: Intern + ?Sized> Interned<T> {
         Weak(Arc::downgrade(&this.0))
     }
 
-    /// Interns a [`Box`]ed `value` or returns an already interned value.
+    /// Interns the given unique [`Arc`].
     ///
-    /// This is a more flexible option requiring neither [`Sized`] like [`Self::from_owned`] nor
-    /// [`InternRef`] like [`Self::from_ref`] but also less efficient unless you already have a
-    /// [`Box`] anyway.
-    pub fn from_box(value: Box<T>) -> Self {
-        Self::new(
+    /// # Panics
+    ///
+    /// Panics if the given [`Arc`] is not unique; consider calling [`Arc::make_mut`] if unsure.
+    ///
+    /// TODO: Replace the panic with UniqueArc.
+    pub fn from_unique_arc(value: Arc<T>) -> Self {
+        assert_eq!(Arc::strong_count(&value), 1, "interned Arc must be unique");
+        Self::from_interned(
             INTERNERS
                 .get_value(&*value)
-                .unwrap_or_else(|| INTERNERS.intern(value.into())),
+                .unwrap_or_else(|| INTERNERS.intern(value)),
+        )
+    }
+
+    /// Interns the given `value`.
+    ///
+    /// Prefer [`Self::from_owned`] if you have an owned value and don't need it anymore.
+    pub fn from_ref(value: &T) -> Self {
+        Self::from_interned(
+            INTERNERS
+                .get_value(value)
+                .unwrap_or_else(|| INTERNERS.intern(value.clone_into_unique_arc())),
         )
     }
 }
 
 impl<T: Intern> Interned<T> {
-    /// Interns the given `value` or returns an already interned value.
+    /// Interns the given `value`.
     ///
-    /// The given `value` is dropped if it was already interned.
+    /// `value` is dropped if it was already interned.
     pub fn from_owned(value: T) -> Self {
-        Self::new(
+        Self::from_interned(
             INTERNERS
                 .get_value(&value)
-                .unwrap_or_else(|| INTERNERS.intern(value.into())),
+                .unwrap_or_else(|| INTERNERS.intern(Arc::new(value))),
         )
     }
 
@@ -363,39 +372,26 @@ impl<T: Intern> Interned<T> {
     ///
     /// The value remains interned as a plain `T`; that's the whole point of [`InternedErased`].
     pub fn erase<A: InternErasedFrom<T> + ?Sized>(this: Self) -> InternedErased<A> {
-        InternedErased::new(A::erase(this.relocate()))
+        InternedErased::from_interned(A::erase(this.relocate()))
     }
 }
 
-impl<T: InternRef + ?Sized> Interned<T> {
-    /// Interns the given `value` via [`InternRef`] or returns an already interned value.
-    ///
-    /// Prefer [`Self::from_owned`] if you have an owned value and don't need it anymore.
-    pub fn from_ref(value: &T) -> Self {
-        Self::new(
-            INTERNERS
-                .get_value(value)
-                .unwrap_or_else(|| INTERNERS.intern(value.intern_ref().into())),
-        )
-    }
-}
-
-impl<T: Intern> Interned<[T]> {
+impl<T: Intern + Clone> Interned<[T]> {
     /// Interns a fixed-size array [`[T; N]`](prim@array) into an unsized slice [`[T]`](prim@array).
     ///
     /// [`Interned::from_owned`] cannot be used for this since it would require the given `value` to
-    /// be of type [`[T]`](prim@slice) which is not possible.
+    /// be of type [`[T]`](prim@slice) which is unsized.
     ///
-    /// [`Interned::from_ref`] and [`Interned::from_box`] both work since they introduce indirection
-    /// but the former requires `T` to be [`Clone`] and the latter requires eagerly wrapping the
-    /// array in a [`Box`].
+    /// [`Interned::from_ref`] and [`Interned::from_unique_arc`] both work since they introduce
+    /// indirection but the former may [`Clone`] `T` unnecessarily and the latter requires eagerly
+    /// wrapping the array in an [`Arc`].
     ///
     /// Also see [`InternedAsSlice`] which is internally always interned as a slice while retaining
     /// its array interface.
     pub fn slice_from_array<const N: usize>(value: [T; N]) -> Self {
         // Turbofish to make 100% sure the value is interned as [T] and **not** as [T; N].
         // Wrapping that in Interned would just unsize the already interned Arc which is wrong!
-        Self::new(
+        Self::from_interned(
             INTERNERS
                 .get_value::<[_]>(&value)
                 .unwrap_or_else(|| INTERNERS.intern::<[_]>(value.into())),
@@ -404,22 +400,73 @@ impl<T: Intern> Interned<[T]> {
 
     /// Tries to coerce the unsized slice into a fixed-size array.
     pub fn into_array<const N: usize>(self) -> Option<InternedAsSlice<T, N>> {
-        self.relocate().try_into().ok().map(InternedAsSlice::new)
+        self.relocate()
+            .try_into()
+            .ok()
+            .map(InternedAsSlice::from_interned)
     }
 }
 
-/// A trait alias for all types that can be interned.
+/// Types that can be interned via [`Interned`].
 ///
 /// It requires all of the following:
 ///
-/// - [`Hash`] and [`Eq`] to look up existing values in an internal hashmap
+/// - [`Hash`] and [`Eq`] to look up existing values in an internal [`HashMap`]
 /// - [`Send`] and [`Sync`] since [`INTERNERS`] is shared globally across all threads
 /// - `'static` since [`INTERNERS`] is `static`
 ///
-/// `?Sized` types such as [`str`] and [`[T]`](prim@slice) are not only supported but should usually
-/// be preferred over owned types such as [`String`] and [`Vec`].
-pub trait Intern: Hash + Eq + Send + Sync + 'static {}
-impl<T: Hash + Eq + Send + Sync + 'static + ?Sized> Intern for T {}
+/// It is implemented for all [`Sized`] types that are [`Clone`] and for unsized types in the
+/// standard library such as [`str`] and [`[T]`](prim@slice) which should be preferred over owned
+/// types such as [`String`] and [`Vec`].
+pub trait Intern: Hash + Eq + Send + Sync + 'static {
+    /// Clones the value into a uniquely owned [`Arc`] for use by an interner.
+    ///
+    /// TODO: Return UniqueArc instead once stabilized.
+    fn clone_into_unique_arc(&self) -> Arc<Self>;
+}
+
+// TODO: Once Arc::clone_from_ref and CloneToUninit are stabilized:
+// impl<T: CloneToUninit + Hash + Eq + Send + Sync + 'static + ?Sized> Intern for T {
+//     fn intern(&self) -> Arc<Self> {
+//         Arc::clone_from_ref(self)
+//     }
+// }
+
+impl<T: Clone + Hash + Eq + Send + Sync + 'static> Intern for T {
+    fn clone_into_unique_arc(&self) -> Arc<Self> {
+        Arc::new(self.clone())
+    }
+}
+
+impl<T: Clone + Hash + Eq + Send + Sync + 'static> Intern for [T] {
+    fn clone_into_unique_arc(&self) -> Arc<Self> {
+        self.into()
+    }
+}
+
+impl Intern for str {
+    fn clone_into_unique_arc(&self) -> Arc<Self> {
+        self.into()
+    }
+}
+
+impl Intern for Path {
+    fn clone_into_unique_arc(&self) -> Arc<Self> {
+        self.into()
+    }
+}
+
+impl Intern for OsStr {
+    fn clone_into_unique_arc(&self) -> Arc<Self> {
+        self.into()
+    }
+}
+
+impl Intern for CStr {
+    fn clone_into_unique_arc(&self) -> Arc<Self> {
+        self.into()
+    }
+}
 
 /// An [`Interned<T>`] that does not prevent the value from being deinterned.
 ///
@@ -477,7 +524,7 @@ impl<T: Intern + ?Sized> PartialEq<Interned<T>> for Weak<T> {
     }
 }
 
-impl<T: Intern, const N: usize> PartialEq<InternedAsSlice<T, N>> for Weak<[T]> {
+impl<T: Intern + Clone, const N: usize> PartialEq<InternedAsSlice<T, N>> for Weak<[T]> {
     fn eq(&self, other: &InternedAsSlice<T, N>) -> bool {
         ptr::addr_eq(self.0.as_ptr(), other.as_ptr())
     }
@@ -537,7 +584,7 @@ impl<T: Intern + ?Sized> InternedWeak for Weak<T> {
                 }
                 self.0.upgrade()
             })
-            .map(Interned::new)
+            .map(Interned::from_interned)
     }
 }
 

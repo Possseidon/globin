@@ -8,7 +8,6 @@ pub mod serde;
 
 pub use interned::*;
 pub(crate) use interner::TypedInterner;
-pub use interner::*;
 pub use registry::*;
 
 /// Calls [`InternerRegistry::rename`] with the given type name [`stringify!`]ed.
