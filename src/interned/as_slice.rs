@@ -212,7 +212,7 @@ impl<T: Intern + Clone, const N: usize> InternedAsSlice<T, N> {
 
     /// Creates a new [`WeakAsSlice`] reference to this interned value.
     #[must_use]
-    pub fn downgrade(self) -> WeakAsSlice<T, N> {
+    pub fn downgrade(&self) -> WeakAsSlice<T, N> {
         WeakAsSlice(Arc::downgrade(&self.0))
     }
 
