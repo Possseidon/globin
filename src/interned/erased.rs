@@ -149,7 +149,8 @@ impl<A: InternErasedFrom<T> + ?Sized, T: Intern> From<Interned<T>> for InternedE
 }
 
 impl<A: InternErased + ?Sized> InternedErased<A> {
-    /// Wraps an [`Arc`] that is assumed to already be interned in [`INTERNERS`] in [`Interned`].
+    /// Wraps an [`Arc`] that is assumed to already be interned as some concrete type `T` in
+    /// [`INTERNERS`] in [`InternedErased`].
     pub(super) fn new(value: Arc<A>) -> Self {
         Self(ManuallyDrop::new(value))
     }
