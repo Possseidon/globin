@@ -10,9 +10,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::{
-    INTERNERS, Intern, InternRef, Interned, Weak, impl_intern_erased, interned::InternedWeak,
-};
+use crate::{INTERNERS, Intern, InternRef, Interned, InternedWeak, Weak, impl_intern_erased};
 
 /// Enables type-erasure of an [`Interned<T>`] in a way where it remains interned as a `T`.
 ///
@@ -85,15 +83,13 @@ impl<A: InternErased + ?Sized, B: InternErased + ?Sized> PartialEq<InternedErase
 
 impl<A: InternErased + ?Sized> Eq for InternedErased<A> {}
 
-impl<A: InternErasedFrom<T> + ?Sized, T: Intern + ?Sized> PartialEq<Interned<T>>
-    for InternedErased<A>
-{
+impl<A: InternErasedFrom<T> + ?Sized, T: Intern> PartialEq<Interned<T>> for InternedErased<A> {
     fn eq(&self, other: &Interned<T>) -> bool {
         other == self
     }
 }
 
-impl<A: InternErasedFrom<T> + ?Sized, T: ?Sized> PartialEq<Weak<T>> for InternedErased<A> {
+impl<A: InternErasedFrom<T> + ?Sized, T> PartialEq<Weak<T>> for InternedErased<A> {
     fn eq(&self, other: &Weak<T>) -> bool {
         other == self
     }
@@ -197,7 +193,11 @@ impl<A: InternErased + ?Sized> InternedErased<A> {
 
     /// Tries to downcast the [`InternedErased`] back into the original [`Interned<T>`].
     pub fn downcast<T: Intern>(this: Self) -> Option<Interned<T>> {
-        this.relocate().downcast().map(Interned::new)
+        this.relocate()
+            .erase_for_downcast()
+            .downcast()
+            .ok()
+            .map(Interned::new)
     }
 }
 
@@ -224,10 +224,10 @@ impl_intern_erased!(ErasedInterned);
 
 /// Types that can be used with [`InternedErased<A>`], i.e. `dyn ErasedInterned` and subtraits.
 pub trait InternErased: Any + Send + Sync {
-    /// Downcasts into a concrete type `T`.
+    /// Erases the type so that [`Arc::downcast`] can be called on it.
     ///
     /// Used to implements [`InternedErased::downcast`].
-    fn downcast<T: Intern>(self: Arc<Self>) -> Option<Arc<T>>;
+    fn erase_for_downcast(self: Arc<Self>) -> Arc<dyn Any + Send + Sync>;
 
     /// Notifies [`INTERNERS`] that the value is being dropped.
     ///
@@ -236,7 +236,11 @@ pub trait InternErased: Any + Send + Sync {
 }
 
 /// Extends [`InternErased`] with the capability of erasing a concrete type `T`.
-pub trait InternErasedFrom<T: ?Sized>: InternErased {
+///
+/// `T` could technically be `?Sized`, but it's impossible to actually implement this trait for
+/// unsized `T`s due to the metadata slot (e.g. slice length) being occupied by the vtable necessary
+/// for the type-erasure.
+pub trait InternErasedFrom<T>: InternErased {
     /// Erases the given concrete `T` into `Self`.
     ///
     /// Used to implement conversion from [`Interned<T>`] to [`InternedErased`].
@@ -280,13 +284,13 @@ impl<A: ?Sized, B: ?Sized> PartialEq<WeakErased<B>> for WeakErased<A> {
 
 impl<A: ?Sized> Eq for WeakErased<A> {}
 
-impl<A: InternErasedFrom<T> + ?Sized, T: Intern + ?Sized> PartialEq<Interned<T>> for WeakErased<A> {
+impl<A: InternErasedFrom<T> + ?Sized, T: Intern> PartialEq<Interned<T>> for WeakErased<A> {
     fn eq(&self, other: &Interned<T>) -> bool {
         other == self
     }
 }
 
-impl<A: InternErasedFrom<T> + ?Sized, T: ?Sized> PartialEq<Weak<T>> for WeakErased<A> {
+impl<A: InternErasedFrom<T> + ?Sized, T> PartialEq<Weak<T>> for WeakErased<A> {
     fn eq(&self, other: &Weak<T>) -> bool {
         other == self
     }

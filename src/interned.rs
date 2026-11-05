@@ -1,5 +1,5 @@
-pub(crate) mod as_slice;
-pub(crate) mod erased;
+mod as_slice;
+mod erased;
 
 use std::{
     array::TryFromSliceError,
@@ -14,10 +14,10 @@ use std::{
     sync::Arc,
 };
 
-use crate::{
-    INTERNERS, InternErasedFrom, InternRef, InternedAsSlice, InternedErased, WeakAsSlice,
-    WeakErased,
-};
+pub use as_slice::*;
+pub use erased::*;
+
+use crate::{INTERNERS, InternRef};
 
 /// A value that is interned in the global [`INTERNERS`] registry.
 ///
@@ -164,15 +164,13 @@ impl<T: Intern, const N: usize> PartialEq<WeakAsSlice<T, N>> for Interned<[T]> {
     }
 }
 
-impl<T: Intern + ?Sized, A: InternErasedFrom<T> + ?Sized> PartialEq<InternedErased<A>>
-    for Interned<T>
-{
+impl<T: Intern, A: InternErasedFrom<T> + ?Sized> PartialEq<InternedErased<A>> for Interned<T> {
     fn eq(&self, other: &InternedErased<A>) -> bool {
         ptr::addr_eq(Arc::as_ptr(&self.0), Arc::as_ptr(&other.0))
     }
 }
 
-impl<T: Intern + ?Sized, A: InternErasedFrom<T> + ?Sized> PartialEq<WeakErased<A>> for Interned<T> {
+impl<T: Intern, A: InternErasedFrom<T> + ?Sized> PartialEq<WeakErased<A>> for Interned<T> {
     fn eq(&self, other: &WeakErased<A>) -> bool {
         ptr::addr_eq(Arc::as_ptr(&self.0), other.0.as_ptr())
     }
@@ -489,13 +487,13 @@ impl<T, const N: usize> PartialEq<WeakAsSlice<T, N>> for Weak<[T]> {
     }
 }
 
-impl<T: ?Sized, A: InternErasedFrom<T> + ?Sized> PartialEq<InternedErased<A>> for Weak<T> {
+impl<T, A: InternErasedFrom<T> + ?Sized> PartialEq<InternedErased<A>> for Weak<T> {
     fn eq(&self, other: &InternedErased<A>) -> bool {
         ptr::addr_eq(self.0.as_ptr(), Arc::as_ptr(&other.0))
     }
 }
 
-impl<T: ?Sized, A: InternErasedFrom<T> + ?Sized> PartialEq<WeakErased<A>> for Weak<T> {
+impl<T, A: InternErasedFrom<T> + ?Sized> PartialEq<WeakErased<A>> for Weak<T> {
     fn eq(&self, other: &WeakErased<A>) -> bool {
         ptr::addr_eq(self.0.as_ptr(), other.0.as_ptr())
     }

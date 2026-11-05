@@ -4,18 +4,12 @@ mod interned;
 mod interner;
 mod registry;
 #[cfg(feature = "serde")]
-mod serde;
+pub mod serde;
 
-pub use interned::{
-    Intern, Interned, InternedWeak, Weak, WeakHashMapExt,
-    as_slice::{InternedAsSlice, WeakAsSlice},
-    erased::{ErasedInterned, InternErased, InternErasedFrom, InternedErased, WeakErased},
-};
-pub use interner::InternRef;
+pub use interned::*;
 pub(crate) use interner::TypedInterner;
-pub use registry::{INTERNERS, Interner, InternerRegistry};
-#[cfg(feature = "serde")]
-pub use serde::DeserializeInternedErased;
+pub use interner::*;
+pub use registry::*;
 
 /// Calls [`InternerRegistry::rename`] with the given type name [`stringify!`]ed.
 ///
@@ -32,12 +26,13 @@ macro_rules! rename_interner {
 /// This enables this `dyn Trait` to be used in [`InternedErased`].
 #[macro_export]
 macro_rules! impl_intern_erased {
-    ($ErasedInterned:path) => {
-        impl $crate::InternErased for dyn $ErasedInterned {
-            fn downcast<T: $crate::Intern>(
+    ($([$($For:tt)*])? $ErasedInterned:path $(where $($Where:tt)*)?) => {
+        impl<$($($For)*)?> $crate::InternErased for dyn $ErasedInterned where $($($Where)*)? {
+            fn erase_for_downcast(
                 self: ::std::sync::Arc<Self>,
-            ) -> ::std::option::Option<::std::sync::Arc<T>> {
-                self.erase_for_downcast().downcast().ok()
+            ) -> ::std::sync::Arc<dyn ::std::any::Any + ::std::marker::Send + ::std::marker::Sync>
+            {
+                self.erase_for_downcast()
             }
 
             fn drop(self: ::std::sync::Arc<Self>) {
@@ -45,8 +40,8 @@ macro_rules! impl_intern_erased {
             }
         }
 
-        impl<T: $ErasedInterned> $crate::InternErasedFrom<T> for dyn $ErasedInterned {
-            fn erase(value: ::std::sync::Arc<T>) -> ::std::sync::Arc<Self> {
+        impl<_T: $ErasedInterned, $($($For)*)?> $crate::InternErasedFrom<_T> for dyn $ErasedInterned where $($($Where)*)? {
+            fn erase(value: ::std::sync::Arc<_T>) -> ::std::sync::Arc<Self> {
                 value
             }
         }

@@ -1,6 +1,8 @@
 use std::fmt::Debug;
 
-use globin::{DeserializeInternedErased, ErasedInterned, InternedErased, impl_intern_erased};
+use globin::{
+    ErasedInterned, InternedErased, impl_intern_erased, serde::DeserializeInternedErased,
+};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 
 trait ErasedExample: ErasedInterned + Debug {

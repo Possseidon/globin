@@ -9,7 +9,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::{INTERNERS, Intern, Interned, Weak, interned::InternedWeak};
+use crate::{INTERNERS, Intern, Interned, InternedWeak, Weak};
 
 /// An interned [`[T; N]`](prim@array), but stored as and compatible with [`[T]`](prim@slice).
 ///
