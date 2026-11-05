@@ -2,7 +2,7 @@ use std::{any::type_name, borrow::Cow, sync::Arc};
 
 use crate::{Intern, Interner};
 
-pub(crate) struct TypedInterner<T: ?Sized> {
+pub struct TypedInterner<T: ?Sized> {
     /// [`Arc`] instead of [`crate::Interned<T>`] since it has different [`Eq`] semantics.
     values: ahash::HashSet<Arc<T>>,
     name: Cow<'static, str>,
@@ -51,15 +51,15 @@ impl<T: Intern + ?Sized> Interner for TypedInterner<T> {
     }
 
     fn shrink_to_fit(&mut self) {
-        self.values.shrink_to_fit()
+        self.values.shrink_to_fit();
     }
 
     fn shrink_to(&mut self, min_capacity: usize) {
-        self.values.shrink_to(min_capacity)
+        self.values.shrink_to(min_capacity);
     }
 
     fn reserve(&mut self, additional: usize) {
-        self.values.reserve(additional)
+        self.values.reserve(additional);
     }
 }
 

@@ -62,7 +62,7 @@ where
 impl<T: Intern + Clone, const N: usize> Hash for InternedAsSlice<T, N> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         // strip metadata, similar to what ptr::addr_eq does
-        let stripped_ptr = Arc::as_ptr(&self.0) as *const ();
+        let stripped_ptr = Arc::as_ptr(&self.0).cast::<()>();
         stripped_ptr.hash(state);
     }
 }
@@ -188,7 +188,8 @@ impl<T: Intern + Clone, const N: usize> TryFrom<&mut [T]> for InternedAsSlice<T,
 impl<T: Intern + Clone, const N: usize> InternedAsSlice<T, N> {
     /// Wraps an [`Arc`] that is assumed to already be interned as a [`[T]`](prim@slice) in
     /// [`INTERNERS`] in [`InternedAsSlice`].
-    pub(super) fn from_interned(value: Arc<[T; N]>) -> Self {
+    #[must_use]
+    pub(super) const fn from_interned(value: Arc<[T; N]>) -> Self {
         Self(ManuallyDrop::new(value))
     }
 
@@ -204,11 +205,13 @@ impl<T: Intern + Clone, const N: usize> InternedAsSlice<T, N> {
     }
 
     /// Unsizes the array into a slice.
+    #[must_use]
     pub fn unsize(self) -> Interned<[T]> {
         Interned::from_interned(self.relocate())
     }
 
     /// Creates a new [`WeakAsSlice`] reference to this interned value.
+    #[must_use]
     pub fn downgrade(self) -> WeakAsSlice<T, N> {
         WeakAsSlice(Arc::downgrade(&self.0))
     }
@@ -219,7 +222,8 @@ impl<T: Intern + Clone, const N: usize> InternedAsSlice<T, N> {
     ///
     /// Panics if the given [`Arc`] is not unique; consider calling [`Arc::make_mut`] if unsure.
     ///
-    /// TODO: Replace the panic with UniqueArc.
+    /// TODO: Replace the panic with `UniqueArc`.
+    #[must_use]
     pub fn from_unique_arc(array: Arc<[T; N]>) -> Self {
         Interned::<[T]>::from_unique_arc(array)
             .into_array()
@@ -229,6 +233,8 @@ impl<T: Intern + Clone, const N: usize> InternedAsSlice<T, N> {
     /// Interns the given `array` as a slice.
     ///
     /// `array` is dropped if it was already interned.
+    #[expect(clippy::missing_panics_doc)]
+    #[must_use]
     pub fn from_owned(array: [T; N]) -> Self {
         Interned::slice_from_array(array)
             .into_array()
@@ -238,6 +244,8 @@ impl<T: Intern + Clone, const N: usize> InternedAsSlice<T, N> {
     /// Interns the given `array` as a slice.
     ///
     /// Prefer [`Self::from_owned`] if you have an owned array and don't need it anymore.
+    #[expect(clippy::missing_panics_doc)]
+    #[must_use]
     pub fn from_ref(array: &[T; N]) -> Self {
         Interned::<[T]>::from_ref(array)
             .into_array()
@@ -245,6 +253,10 @@ impl<T: Intern + Clone, const N: usize> InternedAsSlice<T, N> {
     }
 }
 
+/// [`Weak`] but for [`InternedAsSlice`].
+///
+/// Requires a separate type since [`InternedWeak::upgrade`] must only be able to upgrade into the
+/// same type it was downgraded from.
 pub struct WeakAsSlice<T, const N: usize>(pub(super) std::sync::Weak<[T; N]>);
 
 impl<T, const N: usize> Clone for WeakAsSlice<T, N> {
@@ -268,7 +280,7 @@ impl<T, const N: usize> Default for WeakAsSlice<T, N> {
 impl<T, const N: usize> Hash for WeakAsSlice<T, N> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         // strip metadata, similar to what ptr::addr_eq does
-        let stripped_ptr = self.0.as_ptr() as *const ();
+        let stripped_ptr = self.0.as_ptr().cast::<()>();
         stripped_ptr.hash(state);
     }
 }
@@ -300,6 +312,8 @@ impl<T: Intern + Clone, const N: usize> PartialEq<InternedAsSlice<T, N>> for Wea
 }
 
 impl<T, const N: usize> WeakAsSlice<T, N> {
+    /// Constructs a new [`WeakAsSlice<T>`], without allocating any memory.
+    #[must_use]
     pub const fn new() -> Self {
         Self(std::sync::Weak::new())
     }

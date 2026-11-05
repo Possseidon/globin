@@ -1,3 +1,7 @@
+//! Shows how [`InternedErased`] can be serialized and deserialized.
+//!
+//! TODO: More comments with explanations.
+
 use std::fmt::Debug;
 
 use globin::{
@@ -6,7 +10,7 @@ use globin::{
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 
 trait ErasedExample: ErasedInterned + Debug {
-    fn name(&self) -> &str;
+    fn name(&self) -> &'static str;
 }
 
 impl_intern_erased!(ErasedExample);
@@ -15,7 +19,7 @@ impl_intern_erased!(ErasedExample);
 struct A;
 
 impl ErasedExample for A {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "A"
     }
 }
@@ -24,7 +28,7 @@ impl ErasedExample for A {
 struct B;
 
 impl ErasedExample for B {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "B"
     }
 }

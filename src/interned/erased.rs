@@ -29,7 +29,7 @@ pub struct InternedErased<A: InternErased + ?Sized>(pub(super) ManuallyDrop<Arc<
 impl<A: InternErased + ?Sized> Drop for InternedErased<A> {
     fn drop(&mut self) {
         // SAFETY: self is not used after the Arc has been taken out
-        unsafe { ManuallyDrop::take(&mut self.0) }.drop()
+        unsafe { ManuallyDrop::take(&mut self.0) }.drop();
     }
 }
 
@@ -69,7 +69,7 @@ impl<A: InternErased + Error + ?Sized> Error for InternedErased<A> {
 impl<A: InternErased + ?Sized> Hash for InternedErased<A> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         // strip metadata, similar to what ptr::addr_eq does
-        let stripped_ptr = Arc::as_ptr(&self.0) as *const ();
+        let stripped_ptr = Arc::as_ptr(&self.0).cast::<()>();
         stripped_ptr.hash(state);
     }
 }
@@ -152,7 +152,8 @@ impl<A: InternErasedFrom<T> + ?Sized, T: Intern> From<Interned<T>> for InternedE
 impl<A: InternErased + ?Sized> InternedErased<A> {
     /// Wraps an [`Arc`] that is assumed to already be interned as some concrete type `T` in
     /// [`INTERNERS`] in [`InternedErased`].
-    pub(super) fn from_interned(value: Arc<A>) -> Self {
+    #[must_use]
+    pub(super) const fn from_interned(value: Arc<A>) -> Self {
         Self(ManuallyDrop::new(value))
     }
 
@@ -170,6 +171,7 @@ impl<A: InternErased + ?Sized> InternedErased<A> {
     /// Interns the given `value` and immediately type-erases it.
     ///
     /// `value` is dropped if it was already interned.
+    #[must_use]
     pub fn from_owned<T: Intern>(value: T) -> Self
     where
         A: InternErasedFrom<T>,
@@ -183,7 +185,8 @@ impl<A: InternErased + ?Sized> InternedErased<A> {
     ///
     /// Panics if the given [`Arc`] is not unique; consider calling [`Arc::make_mut`] if unsure.
     ///
-    /// TODO: Replace the panic with UniqueArc.
+    /// TODO: Replace the panic with `UniqueArc`.
+    #[must_use]
     pub fn from_unique_arc<T: Intern>(value: Arc<T>) -> Self
     where
         A: InternErasedFrom<T>,
@@ -194,6 +197,7 @@ impl<A: InternErased + ?Sized> InternedErased<A> {
     /// Interns the given `value` and immediately type-erases it.
     ///
     /// Prefer [`Self::from_owned`] if you have an owned value and don't need it anymore.
+    #[must_use]
     pub fn from_ref<T: Intern>(value: &T) -> Self
     where
         A: InternErasedFrom<T>,
@@ -202,11 +206,13 @@ impl<A: InternErased + ?Sized> InternedErased<A> {
     }
 
     /// Creates a new [`WeakErased`] reference to this interned value.
+    #[must_use]
     pub fn downgrade(this: &Self) -> WeakErased<A> {
         WeakErased(Arc::downgrade(&this.0))
     }
 
     /// Tries to downcast the [`InternedErased`] back into the original [`Interned<T>`].
+    #[must_use]
     pub fn downcast<T: Intern>(this: Self) -> Option<Interned<T>> {
         this.relocate()
             .erase_for_downcast()
@@ -219,6 +225,7 @@ impl<A: InternErased + ?Sized> InternedErased<A> {
 /// Extends [`Any`] with additional functionality to work with [`InternedErased`].
 pub trait ErasedInterned: Any + Send + Sync {
     /// Erases the type so that [`Arc::downcast`] can be called on it.
+    #[must_use]
     fn erase_for_downcast(self: Arc<Self>) -> Arc<dyn Any + Send + Sync>;
 
     /// Notifies [`INTERNERS`] that the value is being dropped.
@@ -231,7 +238,7 @@ impl<T: Intern> ErasedInterned for T {
     }
 
     fn drop(self: Arc<Self>) {
-        INTERNERS.drop_value(self)
+        INTERNERS.drop_value(self);
     }
 }
 
@@ -242,6 +249,7 @@ pub trait InternErased: Any + Send + Sync {
     /// Erases the type so that [`Arc::downcast`] can be called on it.
     ///
     /// Used to implements [`InternedErased::downcast`].
+    #[must_use]
     fn erase_for_downcast(self: Arc<Self>) -> Arc<dyn Any + Send + Sync>;
 
     /// Notifies [`INTERNERS`] that the value is being dropped.
@@ -259,6 +267,7 @@ pub trait InternErasedFrom<T>: InternErased {
     /// Erases the given concrete `T` into `Self`.
     ///
     /// Used to implement conversion from [`Interned<T>`] to [`InternedErased`].
+    #[must_use]
     fn erase(value: Arc<T>) -> Arc<Self>;
 }
 
@@ -285,7 +294,7 @@ impl<A: ?Sized> fmt::Debug for WeakErased<A> {
 impl<A: ?Sized> Hash for WeakErased<A> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         // strip metadata, similar to what ptr::addr_eq does
-        let stripped_ptr = self.0.as_ptr() as *const ();
+        let stripped_ptr = self.0.as_ptr().cast::<()>();
         stripped_ptr.hash(state);
     }
 }

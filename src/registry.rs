@@ -1,6 +1,7 @@
 use std::{
     any::{Any, TypeId},
     borrow::Cow,
+    fmt,
     mem::replace,
     sync::{Arc, LazyLock, LockResult, RwLock},
 };
@@ -19,20 +20,30 @@ pub struct InternerRegistry {
     interners: LazyLock<RwLock<RegistryMap>>,
 }
 
+impl fmt::Debug for InternerRegistry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // TODO: show some actual info
+        f.debug_struct("InternerRegistry").finish_non_exhaustive()
+    }
+}
+
 impl InternerRegistry {
     /// The number of interners that have been registered, including empty ones.
+    #[must_use]
     pub fn len(&self) -> usize {
         LazyLock::get(&self.interners)
             .map_or(0, |interners| interners.read().expect_unpoisoned().len())
     }
 
     /// Whether there are no interners registered at the moment.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         LazyLock::get(&self.interners)
             .is_none_or(|interners| interners.read().expect_unpoisoned().is_empty())
     }
 
     /// The number of interners that are registered but currently empty.
+    #[must_use]
     pub fn count_empty(&self) -> usize {
         LazyLock::get(&self.interners).map_or(0, |interners| {
             interners
@@ -45,6 +56,7 @@ impl InternerRegistry {
     }
 
     /// Whether any of the registered interners are currently empty.
+    #[must_use]
     pub fn any_empty(&self) -> bool {
         LazyLock::get(&self.interners).is_some_and(|interners| {
             interners
@@ -66,7 +78,7 @@ impl InternerRegistry {
     /// If a removed interner was renamed via [`Interner::name_mut`] then its name is forgotten
     /// with it.
     pub fn remove_empty(&self) {
-        self.retain_empty(|_| false)
+        self.retain_empty(|_| false);
     }
 
     /// Retains only those empty interners for which `f` returned `true`.
@@ -218,7 +230,7 @@ impl InternerRegistry {
     ///
     /// While not strictly necessary, [`Self::get_value`] should be called first as an optimization.
     ///
-    /// TODO: Use UniqueArc once stabilized.
+    /// TODO: Use `UniqueArc` once stabilized.
     pub(crate) fn intern<T: Intern + ?Sized>(&self, value: Arc<T>) -> Arc<T> {
         self.get_or_init::<T, _>(|interner| interner.downcast_mut().intern(value))
     }
@@ -228,7 +240,7 @@ impl InternerRegistry {
     /// If it was indeed the last reference, then it is dropped after the write-lock is released.
     /// This is necessary to prevent deadlocks but does mean, that there is a brief moment where the
     /// [`Arc`] has [`Arc::strong_count`] of 1. [`crate::Weak`] makes sure to not upgrade if the
-    /// strong_count is 1.
+    /// `strong_count` is 1.
     ///
     /// If it was not the last reference, then it instead dropped *while* holding the lock to ensure
     /// the [`Arc::strong_count`] is decremented in a way that ensures that the next dropped [`Arc`]
@@ -247,17 +259,20 @@ pub trait Interner: Any + Send + Sync {
     /// This should ideally only be used to give a user a way to distinguish interners at runtime.
     ///
     /// Defaults to [`Self::original_name`] but can be changed with [`Self::name_mut`].
+    #[must_use]
     fn name(&self) -> &str;
 
     /// Mutable access to [`Self::name`].
     ///
     /// This can be used to provide better (e.g. less verbose) type names to show to the user or
     /// even let the user rename them manually; ideally in a persisted way.
+    #[must_use]
     fn name_mut(&mut self) -> &mut Cow<'static, str>;
 
     /// The [`Self::name`] that is used by default which uses [`std::any::type_name`].
     ///
     /// Can be used to reset the name back to its original value.
+    #[must_use]
     fn original_name(&self) -> &'static str;
 
     /// Resets [`Self::name`] to [`Self::original_name`].
@@ -266,9 +281,11 @@ pub trait Interner: Any + Send + Sync {
     }
 
     /// The number of interned values, including values that are no longer used.
+    #[must_use]
     fn len(&self) -> usize;
 
     /// Whether this interner stores any values, including ones that are no longer used.
+    #[must_use]
     fn is_empty(&self) -> bool;
 
     /// The total number of [`Interned<T>`] that are duplicates.
@@ -282,11 +299,13 @@ pub trait Interner: Any + Send + Sync {
     /// dropped at any time from other threads.
     ///
     /// [`Interned<T>`]: crate::Interned
+    #[must_use]
     fn sum_root_duplicates(&self) -> usize;
 
     /// Returns the number of values that can be interned without reallocating.
     ///
     /// See [`std::collections::HashSet::capacity`].
+    #[must_use]
     fn capacity(&self) -> usize;
 
     /// See [`std::collections::HashSet::shrink_to_fit`].
@@ -305,6 +324,7 @@ impl dyn Interner {
     /// # Panics
     ///
     /// Panics if the [`Interner`] isn't for type `T`.
+    #[must_use]
     fn downcast_ref<T: Intern + ?Sized>(&self) -> &TypedInterner<T> {
         (self as &dyn Any)
             .downcast_ref::<TypedInterner<_>>()
@@ -316,6 +336,7 @@ impl dyn Interner {
     /// # Panics
     ///
     /// Panics if the [`Interner`] isn't for type `T`.
+    #[must_use]
     fn downcast_mut<T: Intern + ?Sized>(&mut self) -> &mut TypedInterner<T> {
         (self as &mut dyn Any)
             .downcast_mut::<TypedInterner<_>>()

@@ -35,3 +35,16 @@ required-features = ["serde"]
 [[example]]
 name = "serde_erased"
 required-features = ["serde"]
+
+[lints.rust]
+missing_copy_implementations = "warn"
+missing_debug_implementations = "warn"
+missing_docs = "warn"
+
+[lints.clippy]
+cargo = "warn"
+nursery = "warn"
+pedantic = "warn"
+todo = "warn"
+undocumented_unsafe_blocks = "warn"
+default_trait_access = { level = "allow", priority = 1 }

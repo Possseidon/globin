@@ -33,7 +33,7 @@ impl<'de> Deserialize<'de> for Interned<str> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct StrVisitor;
 
-        impl<'de> Visitor<'de> for StrVisitor {
+        impl Visitor<'_> for StrVisitor {
             type Value = Interned<str>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -59,7 +59,7 @@ impl<'de> Deserialize<'de> for Interned<Path> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct PathVisitor;
 
-        impl<'de> Visitor<'de> for PathVisitor {
+        impl Visitor<'_> for PathVisitor {
             type Value = Interned<Path>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -125,6 +125,11 @@ impl<A: InternErased + Serialize + ?Sized> Serialize for InternedErased<A> {
 /// This requires some form of factory that knows all possible types. This cannot be solved through
 /// dynamic dispatch alone since for that a dispatchable type would first need to exist.
 pub trait DeserializeInternedErased<'de>: InternErased {
+    /// Deserializes a value and immediately type-erases it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if deserialization fails.
     fn deserialize_erased<D: Deserializer<'de>>(
         deserializer: D,
     ) -> Result<InternedErased<Self>, D::Error>;

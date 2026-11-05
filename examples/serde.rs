@@ -1,3 +1,5 @@
+//! Shows that [`Interned`] supports [`Serialize`] and [`Deserialize`].
+
 use globin::{INTERNERS, Interned};
 use serde::{Deserialize, Serialize};
 use serde_json::json;

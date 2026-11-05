@@ -143,7 +143,7 @@ impl Default for Interned<CStr> {
 impl<T: Intern + ?Sized> Hash for Interned<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         // strip metadata, similar to what ptr::addr_eq does
-        let stripped_ptr = Arc::as_ptr(&self.0) as *const ();
+        let stripped_ptr = Arc::as_ptr(&self.0).cast::<()>();
         stripped_ptr.hash(state);
     }
 }
@@ -308,7 +308,8 @@ impl<T: Intern + Clone> FromIterator<T> for Interned<[T]> {
 
 impl<T: Intern + ?Sized> Interned<T> {
     /// Creates an [`Interned`] from an already interned [`Arc`].
-    fn from_interned(value: Arc<T>) -> Self {
+    #[must_use]
+    const fn from_interned(value: Arc<T>) -> Self {
         Self(ManuallyDrop::new(value))
     }
 
@@ -324,6 +325,7 @@ impl<T: Intern + ?Sized> Interned<T> {
     }
 
     /// Creates a new [`Weak`] reference to this interned value.
+    #[must_use]
     pub fn downgrade(this: &Self) -> Weak<T> {
         Weak(Arc::downgrade(&this.0))
     }
@@ -334,7 +336,8 @@ impl<T: Intern + ?Sized> Interned<T> {
     ///
     /// Panics if the given [`Arc`] is not unique; consider calling [`Arc::make_mut`] if unsure.
     ///
-    /// TODO: Replace the panic with UniqueArc.
+    /// TODO: Replace the panic with `UniqueArc`.
+    #[must_use]
     pub fn from_unique_arc(value: Arc<T>) -> Self {
         assert_eq!(Arc::strong_count(&value), 1, "interned Arc must be unique");
         Self::from_interned(
@@ -347,6 +350,7 @@ impl<T: Intern + ?Sized> Interned<T> {
     /// Interns the given `value`.
     ///
     /// Prefer [`Self::from_owned`] if you have an owned value and don't need it anymore.
+    #[must_use]
     pub fn from_ref(value: &T) -> Self {
         Self::from_interned(
             INTERNERS
@@ -360,6 +364,7 @@ impl<T: Intern> Interned<T> {
     /// Interns the given `value`.
     ///
     /// `value` is dropped if it was already interned.
+    #[must_use]
     pub fn from_owned(value: T) -> Self {
         Self::from_interned(
             INTERNERS
@@ -371,6 +376,7 @@ impl<T: Intern> Interned<T> {
     /// Coerces the value into a type-erased [`InternedErased`].
     ///
     /// The value remains interned as a plain `T`; that's the whole point of [`InternedErased`].
+    #[must_use]
     pub fn erase<A: InternErasedFrom<T> + ?Sized>(this: Self) -> InternedErased<A> {
         InternedErased::from_interned(A::erase(this.relocate()))
     }
@@ -388,6 +394,7 @@ impl<T: Intern + Clone> Interned<[T]> {
     ///
     /// Also see [`InternedAsSlice`] which is internally always interned as a slice while retaining
     /// its array interface.
+    #[must_use]
     pub fn slice_from_array<const N: usize>(value: [T; N]) -> Self {
         // Turbofish to make 100% sure the value is interned as [T] and **not** as [T; N].
         // Wrapping that in Interned would just unsize the already interned Arc which is wrong!
@@ -399,6 +406,7 @@ impl<T: Intern + Clone> Interned<[T]> {
     }
 
     /// Tries to coerce the unsized slice into a fixed-size array.
+    #[must_use]
     pub fn into_array<const N: usize>(self) -> Option<InternedAsSlice<T, N>> {
         self.relocate()
             .try_into()
@@ -421,7 +429,7 @@ impl<T: Intern + Clone> Interned<[T]> {
 pub trait Intern: Hash + Eq + Send + Sync + 'static {
     /// Clones the value into a uniquely owned [`Arc`] for use by an interner.
     ///
-    /// TODO: Return UniqueArc instead once stabilized.
+    /// TODO: Return `UniqueArc` instead once stabilized.
     fn clone_into_unique_arc(&self) -> Arc<Self>;
 }
 
@@ -505,7 +513,7 @@ impl<T> Default for Weak<T> {
 impl<T: ?Sized> Hash for Weak<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         // strip metadata, similar to what ptr::addr_eq does
-        let stripped_ptr = self.0.as_ptr() as *const ();
+        let stripped_ptr = self.0.as_ptr().cast::<()>();
         stripped_ptr.hash(state);
     }
 }
@@ -549,6 +557,8 @@ impl<T, A: InternErasedFrom<T> + ?Sized> PartialEq<WeakErased<A>> for Weak<T> {
 }
 
 impl<T> Weak<T> {
+    /// Constructs a new [`Weak<T>`], without allocating any memory.
+    #[must_use]
     pub const fn new() -> Self {
         Self(std::sync::Weak::new())
     }
@@ -597,12 +607,14 @@ pub trait InternedWeak {
     ///
     /// While `true` guarantees that any subsequent [`Self::upgrade`] *will* fail, `false` has no
     /// guarantee that a subsequent [`Self::upgrade`] will succeed since it could die in between.
+    #[must_use]
     fn dead(&self) -> bool;
 
     /// Upgrades back into an [`Self::Strong`] as long as there is another strong reference to it.
     ///
     /// Slightly more expensive than a plain [`std::sync::Weak::upgrade`] since the upgrade must be
     /// performed while holding a write-lock on the interner.
+    #[must_use]
     fn upgrade(&self) -> Option<Self::Strong>;
 }
 
