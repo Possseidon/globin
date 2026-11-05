@@ -212,13 +212,23 @@ impl<A: InternErased + ?Sized> InternedErased<A> {
     }
 
     /// Tries to downcast the [`InternedErased`] back into the original [`Interned<T>`].
-    #[must_use]
-    pub fn downcast<T: Intern>(this: Self) -> Option<Interned<T>> {
+    ///
+    /// # Errors
+    ///
+    /// Returns the original [`InternedErased`] if the downcast fails.
+    #[expect(clippy::missing_panics_doc)]
+    pub fn downcast<T: Intern>(this: Self) -> Result<Interned<T>, Self>
+    where
+        A: InternErasedFrom<T>,
+    {
         this.relocate()
             .erase_for_downcast()
             .downcast()
-            .ok()
             .map(Interned::from_interned)
+            .map_err(Arc::downcast)
+            .map_err(|value| value.expect("downcast back to the original type shouldn't fail"))
+            .map_err(A::erase)
+            .map_err(Self::from_interned)
     }
 }
 

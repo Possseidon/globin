@@ -406,12 +406,15 @@ impl<T: Intern + Clone> Interned<[T]> {
     }
 
     /// Tries to coerce the unsized slice into a fixed-size array.
-    #[must_use]
-    pub fn into_array<const N: usize>(self) -> Option<InternedAsSlice<T, N>> {
+    ///
+    /// # Errors
+    ///
+    /// Returns the original [`Interned`] if the slice doesn't hold exactly `N` items.
+    pub fn into_array<const N: usize>(self) -> Result<InternedAsSlice<T, N>, Self> {
         self.relocate()
             .try_into()
-            .ok()
             .map(InternedAsSlice::from_interned)
+            .map_err(Self::from_interned)
     }
 }
 

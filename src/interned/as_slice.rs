@@ -227,6 +227,7 @@ impl<T: Intern + Clone, const N: usize> InternedAsSlice<T, N> {
     pub fn from_unique_arc(array: Arc<[T; N]>) -> Self {
         Interned::<[T]>::from_unique_arc(array)
             .into_array()
+            .ok()
             .expect("slice should have the correct length")
     }
 
@@ -238,6 +239,7 @@ impl<T: Intern + Clone, const N: usize> InternedAsSlice<T, N> {
     pub fn from_owned(array: [T; N]) -> Self {
         Interned::slice_from_array(array)
             .into_array()
+            .ok()
             .expect("slice should have the correct length")
     }
 
@@ -249,6 +251,7 @@ impl<T: Intern + Clone, const N: usize> InternedAsSlice<T, N> {
     pub fn from_ref(array: &[T; N]) -> Self {
         Interned::<[T]>::from_ref(array)
             .into_array()
+            .ok()
             .expect("slice should have the correct length")
     }
 }
