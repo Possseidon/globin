@@ -87,4 +87,4 @@ fn relocate(mut self) -> Arc<T> {
 
 The safe `ManuallyDrop::into_inner` sounds like it should be able to do this, but it requires destructuring `Self` to take out the `ManuallyDrop` which is (rightfully) prevented by the manual `Drop` implementation. The `forget` right after `ManuallyDrop::take` is very important as it prevents `Drop` from calling `ManuallDrop::take` a second time at the end of the function.
 
-Care has to be taken with the returned `Arc` since it must be **unconditionally** wrapped in some `Interned` type again. If the `Arc` gets dropped without a wrapper the value can remain interned despite no longer having any reference, effectively creating a temporary leak until an equivalent value gets interned again in the future and restoring that value's interning lifecycle.
+Care has to be taken with the returned `Arc` since it must be **unconditionally** wrapped in some `Interned` type again. If the `Arc` gets dropped without a wrapper the value can remain interned despite no longer having any reference, effectively leaving an orphaned interner entry until an equivalent value is interned again in the future, if that ever happens.
