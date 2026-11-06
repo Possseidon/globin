@@ -1,6 +1,6 @@
 # SAFETY
 
-There is one single use of `unsafe`; it is not technically necessary but it should help the optimizer and, maybe surprisingly, keeps the code slightly simpler. Let me explain:
+There are a few uses of `unsafe`. They are not technically necessary but should help the optimizer and, maybe surprisingly, keep the code slightly simpler; let me explain:
 
 `Interned<T>` is implemented as an `Arc`:
 
@@ -68,3 +68,23 @@ impl<T> Drop for Interned<T> {
 ```
 
 This converts the `ManuallyDrop<Arc<T>>` back into a plain `Arc<T>`. This is however where we need `unsafe` since the compiler can no longer guarantee that we don't do anything with `self` after we took it out.
+
+Similar `unsafe` blocks can be found in `InternedAsSlice` and `InternedErased` since they use a coerced `Arc` of a different type rather than just wrapping `Interned`.
+
+To implement `Clone`-free coercion between different interned types an additional `unsafe` block is necessary to take the `Arc` out of the source type so it can be relocated into a coerced wrapper. Each type has a `relocate` function that extracts the `Arc`:
+
+```rust
+#[must_use = "leaks unless the Arc is wrapped in a different wrapper"]
+fn relocate(mut self) -> Arc<T> {
+    // SAFETY: self is not used after the Arc has been taken out and Drop is skipped
+    unsafe {
+        let arc = ManuallyDrop::take(&mut self.0);
+        forget(self);
+        arc
+    }
+}
+```
+
+The safe `ManuallyDrop::into_inner` sounds like it should be able to do this, but it requires destructuring `Self` to take out the `ManuallyDrop` which is (rightfully) prevented by the manual `Drop` implementation. The `forget` right after `ManuallyDrop::take` is very important as it prevents `Drop` from calling `ManuallDrop::take` a second time at the end of the function.
+
+Care has to be taken with the returned `Arc` since it must be **unconditionally** wrapped in some `Interned` type again. If the `Arc` gets dropped without a wrapper the value can remain interned despite no longer having any reference, effectively creating a temporary leak until an equivalent value gets interned again in the future and restoring that value's interning lifecycle.
